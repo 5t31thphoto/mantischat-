@@ -1,0 +1,185 @@
+# ═══════════════════════════════════════════════════════════════
+#  MantisChat (M5Stack Core2) -- build firmware + publish web flasher
+# ═══════════════════════════════════════════════════════════════
+#  Hand-written. Do not round-trip through a YAML serialiser (a bare
+#  `on:` turns into `true:` under YAML 1.1).
+#
+#  Jobs:
+#    apply-drop   unpack a dropped *.zip in the repo root over the tree
+#    build        arduino-cli compile, merged + app binaries
+#    pages        assemble web/ + firmware + manifest, publish (main only)
+# ═══════════════════════════════════════════════════════════════
+name: build
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  ESP32_CORE: esp32:esp32@3.0.7
+  M5UNIFIED_VER: "0.2.10"
+  M5GFX_VER: "0.2.10"
+  ESPTOOL_VER: "4.8.1"
+  SKETCH: MantisChat
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  apply-drop:
+    name: Apply dropped zip (if any)
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.result.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Look for a dropped zip
+        id: find
+        run: |
+          shopt -s nullglob
+          zips=(*.zip)
+          if [ ${#zips[@]} -eq 0 ]; then echo "zip=" >> "$GITHUB_OUTPUT"
+          elif [ ${#zips[@]} -gt 1 ]; then echo "::error::More than one .zip in repo root: ${zips[*]}"; exit 1
+          else echo "zip=${zips[0]}" >> "$GITHUB_OUTPUT"; fi
+      - name: Unpack over the working tree
+        if: steps.find.outputs.zip != ''
+        run: |
+          set -euo pipefail
+          ZIP="${{ steps.find.outputs.zip }}"
+          TMP=$(mktemp -d); unzip -q "$ZIP" -d "$TMP/x"; SRC="$TMP/x"
+          if [ "$(ls -A "$SRC" | wc -l)" -eq 1 ]; then
+            only="$(ls -A "$SRC")"; [ -d "$SRC/$only" ] && SRC="$SRC/$only"
+          fi
+          rm -rf "$SRC/.git"
+          # GITHUB_TOKEN cannot write .github/workflows -- copy those by hand.
+          if [ -d "$SRC/.github/workflows" ]; then
+            echo "::warning::Drop contains workflow files; not applied. Copy them to .github/workflows by hand."
+            rm -rf "$SRC/.github/workflows"
+          fi
+          cp -a "$SRC"/. .
+          rm -f "$ZIP"
+      - name: Commit the result
+        id: result
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if [ -z "${{ steps.find.outputs.zip }}" ] || git diff --cached --quiet; then
+            echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          git commit -q -m "Apply ${{ steps.find.outputs.zip }} [drop-in]"
+          git push origin HEAD:"${GITHUB_REF_NAME}"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  # ─────────────────────────────────────────────────────────────
+  build:
+    name: Build MantisChat (Core2)
+    needs: apply-drop
+    runs-on: ubuntu-latest
+    outputs:
+      short_sha: ${{ steps.sha.outputs.short_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.apply-drop.outputs.sha }}
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 core
+        run: |
+          set -euo pipefail
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          for i in 1 2 3; do arduino-cli core update-index && break || sleep 10; done
+          for i in 1 2 3; do arduino-cli core install "${{ env.ESP32_CORE }}" && break || sleep 15; done
+
+      - name: Install libraries (pinned)
+        run: |
+          set -euo pipefail
+          for i in 1 2 3; do arduino-cli lib install --no-deps "M5Unified@${{ env.M5UNIFIED_VER }}" && break || sleep 10; done
+          for i in 1 2 3; do arduino-cli lib install --no-deps "M5GFX@${{ env.M5GFX_VER }}" && break || sleep 10; done
+          arduino-cli lib list
+
+      - name: Short SHA
+        id: sha
+        run: echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Compile
+        run: |
+          set -o pipefail
+          mkdir -p build/out
+          # 16 MB flash on the Core2 -> default_16MB (6.25 MB app slot)
+          arduino-cli compile --fqbn esp32:esp32:m5stack_core2 \
+            --build-property "build.partitions=default_16MB" \
+            --build-property "upload.maximum_size=6553600" \
+            --output-dir build/out "./${{ env.SKETCH }}" 2>&1 | tee build/compile.log
+
+      - name: Merge binaries
+        run: |
+          set -euo pipefail
+          pip install --retries 5 "esptool==${{ env.ESPTOOL_VER }}"
+          BOOT_APP0=$(find ~/.arduino15 -name boot_app0.bin | head -1)
+          cd build/out
+          python -m esptool --chip esp32 merge_bin -o mantischat-core2-merged.bin \
+            --flash_mode keep --flash_freq keep --flash_size keep \
+            0x1000 "${{ env.SKETCH }}.ino.bootloader.bin" \
+            0x8000 "${{ env.SKETCH }}.ino.partitions.bin" \
+            0xe000 "$BOOT_APP0" \
+            0x10000 "${{ env.SKETCH }}.ino.bin"
+          cp "${{ env.SKETCH }}.ino.bin" mantischat-core2-app.bin
+          for f in mantischat-core2-merged.bin mantischat-core2-app.bin; do
+            [ "$(od -An -tx1 -N1 "$f" | tr -d ' \n')" = "e9" ] || { echo "::error::$f lacks ESP image magic"; exit 1; }
+          done
+          ls -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: build/out/mantischat-core2-*.bin
+          retention-days: 30
+
+  # ─────────────────────────────────────────────────────────────
+  pages:
+    name: Assemble + deploy web flasher
+    needs: [apply-drop, build]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.apply-drop.outputs.sha }}
+      - uses: actions/download-artifact@v4
+        with: { name: firmware, path: dl }
+      - name: Assemble site
+        run: |
+          set -euo pipefail
+          mkdir -p site/firmware
+          cp -r web/. site/
+          cp dl/*.bin site/firmware/
+          SHORT_SHA="${{ needs.build.outputs.short_sha }}"
+          BUILD_DATE=$(date -u +%Y-%m-%d)
+          sed -i "s|{{SHORT_SHA}}|${SHORT_SHA}|g; s|{{BUILD_DATE}}|${BUILD_DATE}|g" site/index.html site/manifest.json
+          test -f site/firmware/mantischat-core2-merged.bin
+          touch site/.nojekyll
+          ls -lR site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
