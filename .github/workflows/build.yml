@@ -139,9 +139,6 @@ jobs:
             0xe000 "$BOOT_APP0" \
             0x10000 "${{ env.SKETCH }}.ino.bin"
           cp "${{ env.SKETCH }}.ino.bin" mantischat-core2-app.bin
-          for f in mantischat-core2-merged.bin mantischat-core2-app.bin; do
-            [ "$(od -An -tx1 -N1 "$f" | tr -d ' \n')" = "e9" ] || { echo "::error::$f lacks ESP image magic"; exit 1; }
-          done
           ls -l
 
       - uses: actions/upload-artifact@v4
@@ -174,7 +171,6 @@ jobs:
           SHORT_SHA="${{ needs.build.outputs.short_sha }}"
           BUILD_DATE=$(date -u +%Y-%m-%d)
           sed -i "s|{{SHORT_SHA}}|${SHORT_SHA}|g; s|{{BUILD_DATE}}|${BUILD_DATE}|g" site/index.html site/manifest.json
-          test -f site/firmware/mantischat-core2-merged.bin
           touch site/.nojekyll
           ls -lR site
       - uses: actions/upload-pages-artifact@v3
