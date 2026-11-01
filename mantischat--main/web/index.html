@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MantisChat · Core2 flasher</title>
+<link rel="icon" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
+<style>
+  :root {
+    --mint: #bbe5bd; --mint-deep: #9fd3a3; --leaf: #2f6b2a; --ink: #12260f;
+    --petal: #e7a8d6; --paper: #f3fbf1;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  html { background: var(--mint); }
+  body { margin: 0; color: var(--ink); background: var(--mint);
+    font: 17px/1.55 "Atkinson Hyperlegible", system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 22px 56px; }
+  .hero { display: grid; grid-template-columns: 210px 1fr; gap: 28px; align-items: center; }
+  .hero img { width: 210px; height: 210px; image-rendering: pixelated; display: block;
+    filter: drop-shadow(0 6px 0 var(--mint-deep)); }
+  h1 { font-family: "Pixelify Sans", "Atkinson Hyperlegible", sans-serif; font-weight: 700;
+    font-size: clamp(44px, 9vw, 72px); line-height: .95; margin: 0 0 12px; color: var(--leaf); letter-spacing: -.01em; }
+  .lede { margin: 0; max-width: 34ch; font-size: 19px; }
+  .flash { margin-top: 36px; background: var(--paper); border: 3px solid var(--ink);
+    border-radius: 4px; box-shadow: 6px 6px 0 var(--leaf); padding: 24px; }
+  .flash h2 { font-family: "Pixelify Sans", sans-serif; font-weight: 500; font-size: 28px; margin: 0 0 6px; }
+  .flash p { margin: 0 0 18px; max-width: 60ch; }
+  .actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  esp-web-install-button button, .btn {
+    font: 700 17px "Atkinson Hyperlegible", sans-serif; cursor: pointer;
+    background: var(--leaf); color: var(--paper); border: 3px solid var(--ink);
+    border-radius: 4px; padding: 12px 20px; box-shadow: 3px 3px 0 var(--ink); text-decoration: none; display: inline-block; }
+  .btn.alt { background: var(--paper); color: var(--ink); }
+  .btn:focus-visible, esp-web-install-button button:focus-visible { outline: 3px solid var(--petal); outline-offset: 3px; }
+  .btn:active, esp-web-install-button button:active { transform: translate(3px,3px); box-shadow: none; }
+  .note { font-size: 15px; margin-top: 14px; opacity: .85; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; margin-top: 36px; }
+  .grid section { border-top: 3px solid var(--ink); padding-top: 10px; }
+  .grid h3 { font-family: "Pixelify Sans", sans-serif; font-weight: 500; font-size: 22px; margin: 0 0 4px; }
+  .grid p { margin: 0; }
+  kbd { font: 700 14px "Atkinson Hyperlegible", sans-serif; border: 2px solid var(--ink); border-radius: 3px; padding: 0 6px; background: var(--paper); }
+  footer { margin-top: 40px; font-size: 14px; opacity: .8; }
+  @media (max-width: 560px) { .hero { grid-template-columns: 1fr; } .hero img { width: 150px; height: 150px; } }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --mint: #10200f; --mint-deep: #0a1509; --ink: #d9f2d6; --leaf: #8fd16f; --paper: #172a15; }
+    :root:not([data-theme="light"]) .btn, :root:not([data-theme="light"]) esp-web-install-button button { color: #10200f; }
+    :root:not([data-theme="light"]) .btn.alt { color: var(--ink); }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="hero">
+    <img src="mantis.png" alt="MantisChat mascot, a small green pixel-art praying mantis" width="210" height="210">
+    <div>
+      <h1>MantisChat</h1>
+      <p class="lede">Chat with Mantis Watches over ESP-NOW, and draw on a whiteboard everyone in range shares.</p>
+    </div>
+  </div>
+
+  <div class="flash">
+    <h2>Flash your Core2</h2>
+    <p>Plug the M5Stack Core2 in over USB-C and use Chrome or Edge on a desktop. If no port shows up, install the CP210x or CH9102 USB driver and try again.</p>
+    <div class="actions">
+      <esp-web-install-button manifest="manifest.json">
+        <button slot="activate">Install MantisChat</button>
+        <span slot="unsupported">Your browser can't flash over USB. Open this page in desktop Chrome or Edge, or download the binary below.</span>
+        <span slot="not-allowed">Flashing needs a secure (https) page.</span>
+      </esp-web-install-button>
+      <a class="btn alt" href="firmware/mantischat-core2-merged.bin" download>Download merged .bin</a>
+    </div>
+    <p class="note">The merged image flashes at offset 0x0:<br><code>esptool.py --chip esp32 write_flash 0x0 mantischat-core2-merged.bin</code><br>Build {{SHORT_SHA}}, {{BUILD_DATE}}.</p>
+  </div>
+
+  <div class="grid">
+    <section><h3>Chat</h3><p>Group chat on channel 0 and DMs to anyone under People. Speaks MantisNow v1 and the older MNW1 watch chat.</p></section>
+    <section><h3>Whiteboard</h3><p>Every stroke appears live on every board nearby. Undo, erase and clear only ever remove your own ink.</p></section>
+    <section><h3>Buttons</h3><p><kbd>A</kbd> home, <kbd>B</kbd> chat or keyboard, <kbd>C</kbd> whiteboard. Tap your callsign on the home screen to change it.</p></section>
+  </div>
+  <footer>Firmware source, MANTISNOW.md and WHITEBOARD.md live in the repository.</footer>
+</main>
+</body>
+</html>

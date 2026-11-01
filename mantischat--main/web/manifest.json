@@ -1,0 +1,11 @@
+{
+  "name": "MantisChat for M5Stack Core2",
+  "version": "{{SHORT_SHA}}",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [ { "path": "firmware/mantischat-core2-merged.bin", "offset": 0 } ]
+    }
+  ]
+}
