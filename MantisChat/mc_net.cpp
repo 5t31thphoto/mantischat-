@@ -268,7 +268,6 @@ static void handle_v1(const RxSlot& m) {
     MnHdr h;
     memcpy(&h, m.data, sizeof(h));
     if (h.magic != 0x4D || h.version != 1) return;
-    if (h.srcNode == g_node) return;
     if (seen_check(h.srcNode, h.pktId)) return;
     bool board = h.kind == MN_WB;
     bool isNew = false;
