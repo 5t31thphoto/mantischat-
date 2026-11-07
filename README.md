@@ -1,6 +1,6 @@
 # MantisChat — M5Stack Core2
 
-ESP-NOW chat that talks to Mantis Watches, plus live, chaotic community
+ESP-NOW chat that talks to Mantis Watches, plus a live, chaotic community
 whiteboard shared by every MantisChat in range.
 
 ## Flash

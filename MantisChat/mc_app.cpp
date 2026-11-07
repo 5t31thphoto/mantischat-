@@ -35,11 +35,11 @@ void ui_txt(const char* s, int x, int y, uint16_t col, uint8_t datum) {
 }
 
 void ui_mascot(int x, int y, bool big) {
-    const uint16_t* img = big ? MASCOT_L : MASCOT_S;
     int w = big ? MASCOT_L_W : MASCOT_S_W, h = big ? MASCOT_L_H : MASCOT_S_H;
     for (int j = 0; j < h; j++)
         for (int i = 0; i < w; i++) {
-            uint16_t c = img[j * w + i];
+            // big: 8-bit palette index (half the flash of raw RGB565); small: raw RGB565
+            uint16_t c = big ? MASCOT_L_PAL[MASCOT_L_IDX[j * w + i]] : MASCOT_S[j * w + i];
             if (!big && c == MC_MINT_565) continue;      // small icon: transparent bg
             g_fb.drawPixel(x + i, y + j, c);
         }
